@@ -179,7 +179,7 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
 
     const { loginId, name, role, areaOfResearch, dateOfBirth } = req.body;
 
-    // --- NEW: Input validation for loginId format ---
+    // Input validation for loginId format
     if (role === 'student') {
         const studentRegex = /^\d{2}[A-Z]{3}\d{5}$/;
         if (!studentRegex.test(loginId)) {
@@ -191,7 +191,6 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Invalid format for Login ID. Use 6 digits only.' });
         }
     }
-    // --- END NEW ---
 
     const existingUser = await User.findOne({ loginId });
     if (existingUser) {
@@ -200,13 +199,11 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
 
     let defaultPassword;
     if (role === 'student') {
-      // --- UPDATED: Password format changed to ddmmyy ---
       const date = new Date(dateOfBirth);
       const day = String(date.getDate()).padStart(2, '0');
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const year = String(date.getFullYear()).slice(-2);
       defaultPassword = `${day}${month}${year}`;
-      // --- END UPDATE ---
     } else if (role === 'faculty') {
       const areaPrefix = areaOfResearch.replace(/\s+/g, '').substring(0, 4);
       const namePrefix = name.replace(/\s+/g, '').substring(0, 3);
@@ -215,7 +212,6 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     
-    // --- UPDATED: phoneNumber removed ---
     const userData = {
       loginId,
       password: hashedPassword,
@@ -223,7 +219,6 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
       name,
       mustChangePassword: true
     };
-    // --- END UPDATE ---
 
     if (role === 'faculty') {
       userData.areaOfResearch = areaOfResearch;
@@ -247,11 +242,9 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only admin can view users' });
     }
 
-    // --- UPDATED: phoneNumber removed from select ---
     const users = await User.find({ role: { $ne: 'admin' } })
       .select('loginId name role areaOfResearch createdAt')
       .sort({ createdAt: -1 });
-    // --- END UPDATE ---
       
     res.json(users);
   } catch (error) {
@@ -313,7 +306,6 @@ app.post('/api/admin/reset-user/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
-
 // Project Routes
 app.get('/api/projects', authenticateToken, async (req, res) => {
   try {
