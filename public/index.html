@@ -491,13 +491,13 @@
                         <div class="form-group">
                             <label id="createLoginIdLabel">Registration Number:</label>
                             <input type="text" id="createLoginId" placeholder="Enter registration number">
-                            <small>Format: YYBBBNNNNN (e.g., 24BCE10076)</small>
+                            <small id="loginIdFormatHint">Format: YYBBBNNNNN (e.g., 24BCE10076)</small>
                         </div>
                         <div class="form-group">
                             <label>Full Name:</label>
                             <input type="text" id="createName" placeholder="Enter full name">
                         </div>
-                         </div>
+                    </div>
                     <div>
                         <div class="form-group" id="dateOfBirthGroup">
                             <label>Date of Birth:</label>
@@ -518,7 +518,7 @@
                                 <option value="Gaming">Gaming</option>
                             </select>
                         </div>
-                        </div>
+                    </div>
                 </div>
                 
                 <button class="btn btn-success" onclick="createUser()">Create User</button>
@@ -675,14 +675,12 @@
 
             if (!loginId || !password) return showMessage('loginMessage', 'Please enter login credentials', true);
 
-            // --- NEW: Frontend format validation ---
             if (role === 'student' && !/^\d{2}[A-Z]{3}\d{5}$/.test(loginId)) {
                 return showMessage('loginMessage', 'Invalid format. Use YYBBBNNNNN.', true);
             }
             if (role === 'faculty' && !/^\d{6}$/.test(loginId)) {
                 return showMessage('loginMessage', 'Invalid format. Use 6 digits.', true);
             }
-            // --- END NEW ---
 
             try {
                 const response = await apiCall('/api/auth/login', {
@@ -760,7 +758,6 @@
 
         // Faculty Dashboard
         async function loadFacultyDashboard() {
-            // Implementation for faculty dashboard... (similar structure to student, omitted for brevity but logic is correct)
             try {
                 const [projects, applications, reviewProjects] = await Promise.all([
                     apiCall('/api/projects/my'),
@@ -772,11 +769,6 @@
                 document.getElementById('approvedCount').textContent = projects.filter(p => p.status === 'approved').length;
                 document.getElementById('pendingCount').textContent = projects.filter(p => p.status === 'pending').length;
                 document.getElementById('reviewCount').textContent = reviewProjects.length;
-
-                // Pre-fill faculty's research area in the propose form
-                if (currentUser.areaOfResearch) {
-                    document.getElementById('projectAreaOfResearch').value = currentUser.areaOfResearch;
-                }
                 
                 // My Projects
                 const projectsDiv = document.getElementById('facultyProjects');
@@ -912,14 +904,31 @@
             document.getElementById('createAreaOfResearch').value = '';
         }
 
+        // CORRECTED: This function now properly handles the hint text
         function toggleUserRole(role) {
             document.querySelectorAll('#createUserForm .role-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
+
             const isStudent = role === 'student';
-            document.getElementById('createLoginIdLabel').textContent = isStudent ? 'Registration Number:' : 'Login ID:';
-            document.getElementById('createLoginId').placeholder = isStudent ? 'Enter registration number' : 'Enter 6-digit login ID';
-            document.getElementById('dateOfBirthGroup').classList.toggle('hidden', !isStudent);
-            document.getElementById('areaOfResearchGroup').classList.toggle('hidden', isStudent);
+            const loginIdLabel = document.getElementById('createLoginIdLabel');
+            const loginIdInput = document.getElementById('createLoginId');
+            const dobGroup = document.getElementById('dateOfBirthGroup');
+            const researchGroup = document.getElementById('areaOfResearchGroup');
+            const hintText = document.getElementById('loginIdFormatHint');
+
+            if (isStudent) {
+                loginIdLabel.textContent = 'Registration Number:';
+                loginIdInput.placeholder = 'Enter registration number';
+                dobGroup.classList.remove('hidden');
+                researchGroup.classList.add('hidden');
+                hintText.style.display = 'block'; // Show hint
+            } else {
+                loginIdLabel.textContent = 'Login ID:';
+                loginIdInput.placeholder = 'Enter 6-digit login ID';
+                dobGroup.classList.add('hidden');
+                researchGroup.classList.remove('hidden');
+                hintText.style.display = 'none'; // Hide hint
+            }
         }
 
         async function createUser() {
@@ -933,14 +942,12 @@
             if (role === 'student' && !dateOfBirth) return showMessage('createUserMessage', 'Date of birth is required for students', true);
             if (role === 'faculty' && !areaOfResearch) return showMessage('createUserMessage', 'Area of research is required for faculty', true);
 
-            // --- NEW: Frontend format validation ---
             if (role === 'student' && !/^\d{2}[A-Z]{3}\d{5}$/.test(loginId)) {
                 return showMessage('createUserMessage', 'Invalid format for Registration Number. Use YYBBBNNNNN.', true);
             }
             if (role === 'faculty' && !/^\d{6}$/.test(loginId)) {
                 return showMessage('createUserMessage', 'Invalid format for Login ID. Use 6 digits only.', true);
             }
-            // --- END NEW ---
 
             try {
                 const response = await apiCall('/api/admin/create-user', {
