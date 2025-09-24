@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['student', 'faculty', 'admin'], required: true },
   name: { type: String, required: true },
-  phoneNumber: { type: String, required: true },
+  phoneNumber: { type: String }, // No longer required
   areaOfResearch: { type: String }, // For faculty only
   mustChangePassword: { type: Boolean, default: true }, // Force password change on first login
   projectsReviewed: { type: Number, default: 0 }, // Track review count for faculty
@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema({
 
 const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  abstract: { type: String, required: true, maxlength: 500 },
+  abstract: { type: String, required: true, maxlength: 2500 }, // Corresponds to ~500 words
   timeline: { type: String, required: true },
   seats: { type: Number, required: true, min: 1 },
   seatsAvailable: { type: Number, required: true, min: 0 },
@@ -43,7 +43,7 @@ const projectSchema = new mongoose.Schema({
   reviewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Faculty who reviewed
   rejectionComments: [{ // For rejected projects
     faculty: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    comment: { type: String, maxlength: 500 },
+    comment: { type: String, maxlength: 2500 }, // Corresponds to ~500 words
     reviewedAt: { type: Date, default: Date.now }
   }],
   createdAt: { type: Date, default: Date.now },
@@ -177,7 +177,21 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only admin can create users' });
     }
 
-    const { loginId, name, phoneNumber, role, areaOfResearch, dateOfBirth } = req.body;
+    const { loginId, name, role, areaOfResearch, dateOfBirth } = req.body;
+
+    // --- NEW: Input validation for loginId format ---
+    if (role === 'student') {
+        const studentRegex = /^\d{2}[A-Z]{3}\d{5}$/;
+        if (!studentRegex.test(loginId)) {
+            return res.status(400).json({ error: 'Invalid format for Registration Number. Use YYBBBNNNNN.' });
+        }
+    } else if (role === 'faculty') {
+        const facultyRegex = /^\d{6}$/;
+        if (!facultyRegex.test(loginId)) {
+            return res.status(400).json({ error: 'Invalid format for Login ID. Use 6 digits only.' });
+        }
+    }
+    // --- END NEW ---
 
     const existingUser = await User.findOne({ loginId });
     if (existingUser) {
@@ -186,14 +200,14 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
 
     let defaultPassword;
     if (role === 'student') {
-      // DD-MM-YY format from dateOfBirth
+      // --- UPDATED: Password format changed to ddmmyy ---
       const date = new Date(dateOfBirth);
       const day = String(date.getDate()).padStart(2, '0');
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const year = String(date.getFullYear()).slice(-2);
-      defaultPassword = `${day}-${month}-${year}`;
+      defaultPassword = `${day}${month}${year}`;
+      // --- END UPDATE ---
     } else if (role === 'faculty') {
-      // First 4 letters of area of research + first 3 letters of name (no spaces)
       const areaPrefix = areaOfResearch.replace(/\s+/g, '').substring(0, 4);
       const namePrefix = name.replace(/\s+/g, '').substring(0, 3);
       defaultPassword = areaPrefix + namePrefix;
@@ -201,14 +215,15 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     
+    // --- UPDATED: phoneNumber removed ---
     const userData = {
       loginId,
       password: hashedPassword,
       role,
       name,
-      phoneNumber,
       mustChangePassword: true
     };
+    // --- END UPDATE ---
 
     if (role === 'faculty') {
       userData.areaOfResearch = areaOfResearch;
@@ -232,9 +247,11 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only admin can view users' });
     }
 
+    // --- UPDATED: phoneNumber removed from select ---
     const users = await User.find({ role: { $ne: 'admin' } })
-      .select('loginId name phoneNumber role areaOfResearch createdAt')
+      .select('loginId name role areaOfResearch createdAt')
       .sort({ createdAt: -1 });
+    // --- END UPDATE ---
       
     res.json(users);
   } catch (error) {
@@ -324,8 +341,9 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
 
     const { title, abstract, timeline, seats } = req.body;
     
-    if (abstract.length > 500) {
-      return res.status(400).json({ error: 'Abstract cannot exceed 500 words' });
+    // Updated character limit to better reflect word count
+    if (abstract.length > 2500) {
+      return res.status(400).json({ error: 'Abstract cannot exceed 500 words (approx. 2500 characters)' });
     }
 
     // Get count of projects in this area for reviewer assignment
@@ -452,8 +470,9 @@ app.post('/api/projects/:id/reject', authenticateToken, async (req, res) => {
     }
 
     const { comment } = req.body;
-    if (!comment || comment.length > 500) {
-      return res.status(400).json({ error: 'Feedback comment is required and must not exceed 500 words' });
+    // Updated character limit to better reflect word count
+    if (!comment || comment.length > 2500) {
+      return res.status(400).json({ error: 'Feedback comment is required and must not exceed 500 words (approx. 2500 characters)' });
     }
 
     const project = await Project.findById(req.params.id).populate('faculty');
@@ -486,7 +505,7 @@ app.post('/api/projects/:id/reject', authenticateToken, async (req, res) => {
   }
 });
 
-// Application Routes (unchanged from original, just removed difficulty references)
+// Application Routes
 app.post('/api/applications', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -651,29 +670,30 @@ app.post('/api/applications/:id/reject', authenticateToken, async (req, res) => 
 // Initialize demo data
 app.post('/api/init-demo', async (req, res) => {
   try {
-    const existingUser = await User.findOne({ loginId: 'admin123' });
-    if (existingUser) {
-      return res.json({ message: 'Demo data already exists' });
+    // Clear existing non-admin users, projects, and applications
+    await User.deleteMany({ role: { $ne: 'admin' } });
+    await Project.deleteMany({});
+    await Application.deleteMany({});
+    
+    // Create or find admin user
+    let adminUser = await User.findOne({ loginId: 'admin123' });
+    if (!adminUser) {
+        adminUser = new User({
+            loginId: 'admin123',
+            password: await bcrypt.hash('admin123', 10),
+            role: 'admin',
+            name: 'System Administrator',
+            mustChangePassword: false
+        });
+        await adminUser.save();
     }
-
-    // Create admin user
-    const adminUser = new User({
-      loginId: 'admin123',
-      password: await bcrypt.hash('admin123', 10),
-      role: 'admin',
-      name: 'System Administrator',
-      phoneNumber: '9999999999',
-      mustChangePassword: false
-    });
-    await adminUser.save();
 
     // Create demo faculty
     const facultyUser = new User({
-      loginId: 'FAC001',
+      loginId: '123456', // 6-digit number
       password: await bcrypt.hash('CompDr.', 10), // First 4 of "Computer Science" + first 3 of "Dr. John"
       role: 'faculty',
       name: 'Dr. John Smith',
-      phoneNumber: '9876543210',
       areaOfResearch: 'Computer Science',
       mustChangePassword: true
     });
@@ -682,10 +702,9 @@ app.post('/api/init-demo', async (req, res) => {
     // Create demo student
     const studentUser = new User({
       loginId: '24CSE12345',
-      password: await bcrypt.hash('01-01-00', 10), // Demo DOB format
+      password: await bcrypt.hash('010100', 10), // Demo DOB format ddmmyy
       role: 'student',
       name: 'Jane Doe',
-      phoneNumber: '9876543211',
       mustChangePassword: true
     });
     await studentUser.save();
