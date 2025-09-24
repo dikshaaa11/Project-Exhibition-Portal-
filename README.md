@@ -1,314 +1,123 @@
 # Project Exhibition Portal
 
-A comprehensive web application that connects faculty and students for academic project collaborations. This platform allows faculty to propose projects, students to apply for projects, and faculty members to peer-review project proposals.
+A comprehensive web application that connects faculty and students for academic project collaborations. This platform allows faculty to propose projects, students to apply for them, and ensures a fair, peer-review process for project proposals among faculty.
 
 ## Features
 
 ### For Students
-- Browse approved academic projects from faculty
-- Apply to up to 3 projects simultaneously
-- Track application status in real-time
-- View project details including timeline and available seats
-- Mandatory password change on first login
+- Browse approved academic projects posted by faculty.
+- Apply to a maximum of 3 projects.
+- View real-time status of applications (Pending, Selected, Rejected).
+- Secure login with mandatory password change on first use.
 
 ### For Faculty
-- **Propose Projects:** Create and submit project proposals for peer review
-- **Review Projects:** Review project proposals from faculty in the same research area
-- **Manage Applications:** Select or reject student applications for approved projects
-- **Equal Review Distribution:** System ensures fair distribution of review workload
-- **Feedback System:** Provide detailed feedback when rejecting proposals
-- Mandatory password change on first login
+- **Propose Projects:** Create and submit project proposals with a 500-word limit abstract for peer review.
+- **Peer Review System:** Review project proposals from colleagues in the same research area.
+- **Manage Applications:** Review student applications and select candidates for your projects.
+- **Fair Workload:** The system ensures an equal distribution of review tasks among faculty, with a limit of 7 pending reviews per person.
+- **Constructive Feedback:** Provide detailed feedback (up to 500 words) when a project proposal is rejected.
 
 ### For Admin
-- **User Management:** Create student and faculty accounts
-- **Account Controls:** Delete or reset user accounts
-- **Automated Password Generation:** System generates secure default passwords
-- **Privacy Protection:** No access to academic project details or applications
+- **User Management:** Create and manage student and faculty accounts.
+- **Account Control:** Securely delete or reset user accounts, clearing all associated data (projects, applications).
+- **Automated Passwords:** The system generates secure, predictable default passwords for new users.
+- **Data Privacy:** Admins manage accounts but have no access to academic content like project details or student applications.
 
 ## Live Demo
 
 **Live URL:** [https://project-exhibition-portal.onrender.com](https://project-exhibition-portal.onrender.com)
 
 ### Demo Accounts
-```
-Admin Demo:
-Login ID: admin123
-Password: admin123
-
-Faculty Demo:
-Login ID: FAC001
-Password: CompDr.
-
-Student Demo:
-Registration Number: 24CSE12345
-Password: 01-01-00
-```
+- **Faculty:**
+  - Login ID: `123456`
+  - Password: `CompDr.`
+- **Student:**
+  - Registration Number: `24CSE12345`
+  - Password: `010100`
+- **Admin:**
+  - Login ID: `admin123`
+  - Password: `admin123`
 
 ## Tech Stack
 
 - **Backend:** Node.js, Express.js
-- **Database:** MongoDB (MongoDB Atlas)
-- **Authentication:** JWT (JSON Web Tokens)
-- **Frontend:** Vanilla JavaScript, HTML5, CSS3
-- **Deployment:** Render (Backend & Frontend)
-- **Database Hosting:** MongoDB Atlas (Free Tier)
-
-## Prerequisites
-
-- Node.js (v18 or higher)
-- MongoDB account (Atlas recommended)
-- Git
+- **Database:** MongoDB (with Mongoose)
+- **Authentication:** JWT (JSON Web Tokens) & bcrypt.js for hashing
+- **Frontend:** Vanilla JavaScript, HTML5, CSS3 (single-page application)
+- **Deployment:** Render (for backend & frontend hosting)
 
 ## Project Workflow
 
-### 1. Admin Setup
-- Admin creates student accounts (registration number + DOB-based password)
-- Admin creates faculty accounts (login ID + research area-based password)
+### 1. User Account Creation (Admin)
+- The Admin creates accounts for all users.
+- **Students:** Created with a **Registration Number** (format `YYBBBNNNNN`, e.g., `24BCE10076`) and Date of Birth. The default password is their DOB in `ddmmyy` format.
+- **Faculty:** Created with a 6-digit **Login ID** (format `NNNNNN`, e.g., `123456`) and an assigned Area of Research from a predefined list. The default password is the first 4 letters of their research area + the first 3 letters of their name.
 
-### 2. First Login Process
-- Students/Faculty login with default credentials
-- **Mandatory password change** required before accessing features
-- New password must be different from default
+### 2. First Login
+- All users (students and faculty) log in with their default credentials.
+- They are immediately prompted to change their password to ensure account security.
 
-### 3. Faculty Project Workflow
-- **Propose Project:** Faculty creates project with 500-word description
-- **Peer Review:** System assigns 5 faculty from same research area for review
-- **Review Distribution:** Fair rotation ensures equal workload (max 7 reviews per faculty)
-- **Approval Process:** Project approved when 3+ faculty approve
-- **Rejection Process:** Any faculty can reject with detailed feedback
+### 3. Faculty Project Cycle
+- A faculty member proposes a new project.
+- The system automatically assigns the proposal to 5 other faculty members in the same research area for review. The assignment rotates to ensure fair workload distribution.
+- A project is **approved** after receiving 3 approvals.
+- A project is **rejected** if any reviewer provides feedback for rejection. The proposing faculty can view the feedback and resubmit later.
 
-### 4. Student Application Workflow
-- **Browse Projects:** Students see only approved projects
-- **Apply:** Students can apply to maximum 3 projects
-- **Selection:** Faculty reviews applications and selects students
-- **Seat Management:** Available seats decrease with applications
-
-### 5. Review System Features
-- **Research Area Matching:** Only faculty in same area can review projects
-- **Equal Distribution:** Systematic assignment prevents overload
-- **Feedback Mechanism:** Detailed comments for rejected projects
-- **Workload Limits:** Maximum 7 pending reviews per faculty member
+### 4. Student Application Cycle
+- Students can only browse and apply to **approved** projects.
+- A student can apply to a maximum of 3 projects.
+- Once a faculty member selects a student for a project, that student's other pending applications are automatically rejected.
 
 ## Project Structure
 
 ```
-project-exhibition-portal/
-├── server.js              # Main server file with API routes
-├── package.json           # Dependencies and scripts
+/
+├── server.js           # Express server, API routes, and logic
+├── package.json        # Project dependencies and scripts
 ├── public/
-│   └── index.html        # Frontend application
-├── README.md             # Project documentation
-└── .env                  # Environment variables (create this)
+│   └── index.html      # The single-page frontend (HTML, CSS, JS)
+└── README.md           # This file
 ```
 
-## 🔧 API Endpoints
+## API Endpoints
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/change-password` - Change password (mandatory on first login)
+A brief overview of the core API endpoints.
 
-### Projects
-- `GET /api/projects` - Get all approved projects (students) / all projects (faculty)
-- `POST /api/projects` - Create new project proposal (faculty only)
-- `GET /api/projects/my` - Get faculty's own projects
-- `GET /api/projects/review` - Get projects pending review (faculty only)
-- `POST /api/projects/:id/approve` - Approve project after review (faculty only)
-- `POST /api/projects/:id/reject` - Reject project with feedback (faculty only)
+#### Authentication
+- `POST /api/auth/login`: User login.
+- `POST /api/auth/change-password`: Securely change the user's password.
 
-### Applications
-- `POST /api/applications` - Apply to project (students only)
-- `GET /api/applications/my` - Get student's applications
-- `GET /api/applications/faculty` - Get applications for faculty's projects
-- `POST /api/applications/:id/select` - Select student (faculty only)
-- `POST /api/applications/:id/reject` - Reject application (faculty only)
+#### Admin
+- `POST /api/admin/create-user`: Create a new student or faculty user.
+- `GET /api/admin/users`: Fetch a list of all users.
+- `DELETE /api/admin/user/:id`: Delete a user and all their associated data.
+- `POST /api/admin/reset-user/:id`: Reset a user's account data.
 
-### Admin
-- `GET /api/admin/users` - Get all users (admin only)
-- `POST /api/admin/create-user` - Create new user account (admin only)
-- `DELETE /api/admin/user/:id` - Delete user account (admin only)
-- `POST /api/admin/reset-user/:id` - Reset user account (admin only)
+#### Projects (Faculty)
+- `POST /api/projects`: Propose a new project.
+- `GET /api/projects/my`: View your own proposed projects.
+- `GET /api/projects/review`: Get projects assigned to you for review.
+- `POST /api/projects/:id/approve`: Approve a project.
+- `POST /api/projects/:id/reject`: Reject a project with feedback.
 
-### Utility
-- `POST /api/init-demo` - Initialize demo data
+#### Applications (Student/Faculty)
+- `POST /api/applications`: Student applies to a project.
+- `GET /api/applications/my`: Student views their applications.
+- `GET /api/applications/faculty`: Faculty views applications for their projects.
+- `POST /api/applications/:id/select`: Faculty selects a student.
+- `POST /api/applications/:id/reject`: Faculty rejects an application.
 
-## Deployment Guide
+## Deployment
 
-### Deploy to Render
+This project is configured for easy deployment on platforms like Render.
 
-1. **Push to GitHub:**
-   ```bash
-   git add .
-   git commit -m "Initial commit"
-   git push origin main
-   ```
-
-2. **Set up MongoDB Atlas:**
-   - Create free account at [MongoDB Atlas](https://www.mongodb.com/atlas)
-   - Create new cluster (M0 Sandbox - Free)
-   - Add database user and get connection string
-
-3. **Deploy on Render:**
-   - Connect GitHub repository
-   - Set environment variables:
-     - `MONGODB_URI`: Your MongoDB Atlas connection string
-     - `JWT_SECRET`: A secure random string
-     - `NODE_ENV`: production
-
-4. **Initialize Data:**
-   - Visit your deployed URL
-   - Click "Initialize Demo Data" button
-
-## User Management
-
-### Creating New Users (Admin Dashboard)
-
-The admin can create accounts for both students and faculty through the web interface:
-
-#### Creating Student Accounts:
-1. **Login as Admin**
-2. **Click "Create New User"**
-3. **Select "Student" role**
-4. **Required Information:**
-   - **Registration Number:** Format YYBBBNNNNN 
-     - YY = Year (e.g., 24 for 2024)
-     - BBB = Branch code (e.g., BCE, CSE, etc.)
-     - NNNNN = 5-digit unique number
-     - Example: `24BCE10076`
-   - **Full Name:** Student's complete name
-   - **Phone Number:** 10-digit contact number
-   - **Date of Birth:** Used to generate default password
-5. **Default Password:** Automatically generated as DD-MM-YY format from DOB
-6. **Password Change:** Student must change password on first login
-
-#### Creating Faculty Accounts:
-1. **Login as Admin**
-2. **Click "Create New User"**
-3. **Select "Faculty" role**
-4. **Required Information:**
-   - **Login ID:** 6-digit unique identifier (e.g., `FAC001`)
-   - **Full Name:** Faculty's complete name
-   - **Phone Number:** 10-digit contact number
-   - **Area of Research:** Research specialization (used for project review assignments)
-5. **Default Password:** Automatically generated as:
-   - First 4 letters of area of research + first 3 letters of name (no spaces)
-   - Example: "Computer Science" + "Dr. John" = "CompDr."
-6. **Password Change:** Faculty must change password on first login
-
-### User Account Management
-
-#### Reset User Account:
-- **Deletes all user data** (projects, applications, reviews)
-- **Resets password** to default
-- **Forces password change** on next login
-
-#### Delete User Account:
-- **Permanently removes** user and all associated data
-- **Cannot be undone**
-
-### User Roles and Data Access
-
-#### Student Account Data:
-- Registration number (unique identifier)
-- Name and contact information
-- Date of birth (for password generation)
-- Applied projects and application status
-
-#### Faculty Account Data:
-- Login ID (unique identifier)  
-- Name and contact information
-- Area of research (for review assignment)
-- Proposed projects and review history
-- Project review workload tracking
-
-#### Admin Account Access:
-- **Can access:** User account information, creation/deletion/reset functions
-- **Cannot access:** Project details, applications, review comments, academic content
-
-## 🔐 Security Features
-
-- **JWT Authentication:** Secure token-based authentication
-- **Password Hashing:** bcrypt for secure password storage  
-- **Role-Based Access Control:** Different permissions for students, faculty, and admin
-- **Mandatory Password Changes:** Users must change default passwords on first login
-- **Input Validation:** Server-side validation for all inputs
-- **Privacy Protection:** Admin cannot access academic project details
-- **Review Distribution:** Automated fair assignment of project reviews
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **MongoDB Connection Failed**
-   - Check MONGODB_URI environment variable
-   - Verify MongoDB Atlas network access (allow 0.0.0.0/0)
-   - Confirm database user credentials
-
-2. **JWT Token Errors**
-   - Verify JWT_SECRET environment variable
-   - Check token format in Authorization header
-
-3. **Application Not Loading**
-   - Check server logs for errors
-   - Verify all dependencies are installed
-   - Ensure PORT environment variable is set
-
-### Debug Mode
-Set `NODE_ENV=development` for detailed error logs.
-
-## 📊 Database Schema
-
-### User Schema
-- `loginId` (String, unique, required) - Registration number for students, Login ID for faculty
-- `password` (String, required, hashed)
-- `role` (String, enum: 'student', 'faculty', 'admin')
-- `name` (String, required)
-- `phoneNumber` (String, required)
-- `areaOfResearch` (String) - For faculty only, used for review assignment
-- `mustChangePassword` (Boolean, default: true)
-- `projectsReviewed` (Number, default: 0) - Track review workload for faculty
-
-### Project Schema
-- `title` (String, required)
-- `abstract` (String, required, max 500 words)
-- `timeline` (String, required)
-- `seats` (Number, required, min: 1)
-- `seatsAvailable` (Number, required, min: 0)
-- `faculty` (ObjectId, ref: 'User')
-- `status` (String, enum: 'pending', 'approved', 'rejected')
-- `reviewedBy` (Array of ObjectIds) - Faculty who approved the project
-- `rejectionComments` (Array) - Feedback from reviewing faculty
-
-### Application Schema
-- `student` (ObjectId, ref: 'User')
-- `project` (ObjectId, ref: 'Project')
-- `status` (String, enum: 'pending', 'selected', 'rejected')
-- `cgpa` (Number, optional)
-- `skills` (String, optional)
-- `appliedAt` (Date, default: now)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/new-feature`)
-3. Commit changes (`git commit -am 'Add new feature'`)
-4. Push to branch (`git push origin feature/new-feature`)
-5. Create Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Developer
-
-**Diksha** - [GitHub Profile](https://github.com/dikshaaa11)
-
-## Acknowledgments
-
-- Express.js for the web framework
-- MongoDB for the database solution
-- JWT for authentication
-- Render for deployment platform
-
----
-
-For support or questions, please create an issue in the GitHub repository.
+1.  **Fork and Clone** the repository.
+2.  **Set up MongoDB:** Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/atlas) and get your connection string.
+3.  **Deploy on Render:**
+    - Create a new "Web Service" and connect your GitHub repository.
+    - Set the **Build Command** to `npm install`.
+    - Set the **Start Command** to `npm start`.
+    - Add the following **Environment Variables**:
+      - `MONGODB_URI`: Your MongoDB Atlas connection string.
+      - `JWT_SECRET`: A long, random, secret string for signing tokens.
+4.  **Initialize Data:** After deployment, visit your site and click the "Initialize Demo Data" button to create the demo accounts.
