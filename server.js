@@ -21,29 +21,30 @@ mongoose.connect(MONGODB_URI)
 
 // Database Schemas
 const userSchema = new mongoose.Schema({
-  loginId: { type: String, required: true, unique: true }, // Registration number for students, LoginId for faculty
+  loginId: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['student', 'faculty', 'admin'], required: true },
   name: { type: String, required: true },
-  phoneNumber: { type: String }, // No longer required
-  areaOfResearch: { type: String }, // For faculty only
-  mustChangePassword: { type: Boolean, default: true }, // Force password change on first login
-  projectsReviewed: { type: Number, default: 0 }, // Track review count for faculty
+  areaOfResearch: { type: String }, 
+  mustChangePassword: { type: Boolean, default: true },
+  projectsReviewed: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
+// FINAL projectSchema with detailed review tracking
 const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  abstract: { type: String, required: true, maxlength: 2500 }, // Corresponds to ~500 words
+  abstract: { type: String, required: true, maxlength: 2500 },
   timeline: { type: String, required: true },
   seats: { type: Number, required: true, min: 1 },
   seatsAvailable: { type: Number, required: true, min: 0 },
   faculty: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
-  reviewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Faculty who reviewed
-  rejectionComments: [{ // For rejected projects
+  assignedReviewers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  reviews: [{
     faculty: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    comment: { type: String, maxlength: 2500 }, // Corresponds to ~500 words
+    decision: { type: String, enum: ['approved', 'rejected'], required: true },
+    comment: { type: String, maxlength: 2500 },
     reviewedAt: { type: Date, default: Date.now }
   }],
   createdAt: { type: Date, default: Date.now },
@@ -54,8 +55,6 @@ const applicationSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
   status: { type: String, enum: ['pending', 'selected', 'rejected'], default: 'pending' },
-  cgpa: { type: Number },
-  skills: { type: String },
   appliedAt: { type: Date, default: Date.now }
 });
 
@@ -118,17 +117,14 @@ const getNextReviewers = async (areaOfResearch, proposingFacultyId, projectCount
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { loginId, password } = req.body;
-
     const user = await User.findOne({ loginId });
     if (!user) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
-
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
-
     const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET);
     res.json({ 
       token, 
@@ -148,19 +144,16 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-
     if (req.user.role === 'admin') {
       return res.status(403).json({ error: 'Admin cannot change password through this endpoint' });
     }
-
     const isValidPassword = await bcrypt.compare(currentPassword, req.user.password);
     if (!isValidPassword) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
-
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     
-    // This is the new, more robust way to save the password
+    // Robust save method
     const userToUpdate = await User.findById(req.user._id);
     userToUpdate.password = hashedPassword;
     userToUpdate.mustChangePassword = false;
@@ -178,27 +171,17 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only admin can create users' });
     }
-
     const { loginId, name, role, areaOfResearch, dateOfBirth } = req.body;
-
-    // Input validation for loginId format
-    if (role === 'student') {
-        const studentRegex = /^\d{2}[A-Z]{3}\d{5}$/;
-        if (!studentRegex.test(loginId)) {
-            return res.status(400).json({ error: 'Invalid format for Registration Number. Use YYBBBNNNNN.' });
-        }
-    } else if (role === 'faculty') {
-        const facultyRegex = /^\d{6}$/;
-        if (!facultyRegex.test(loginId)) {
-            return res.status(400).json({ error: 'Invalid format for Login ID. Use 6 digits only.' });
-        }
+    if (role === 'student' && !/^\d{2}[A-Z]{3}\d{5}$/.test(loginId)) {
+        return res.status(400).json({ error: 'Invalid format for Registration Number. Use YYBBBNNNNN.' });
     }
-
+    if (role === 'faculty' && !/^\d{6}$/.test(loginId)) {
+        return res.status(400).json({ error: 'Invalid format for Login ID. Use 6 digits only.' });
+    }
     const existingUser = await User.findOne({ loginId });
     if (existingUser) {
       return res.status(400).json({ error: 'Login ID already exists' });
     }
-
     let defaultPassword;
     if (role === 'student') {
       const date = new Date(dateOfBirth);
@@ -211,9 +194,7 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
       const namePrefix = name.replace(/\s+/g, '').substring(0, 3);
       defaultPassword = areaPrefix + namePrefix;
     }
-
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-    
     const userData = {
       loginId,
       password: hashedPassword,
@@ -221,14 +202,11 @@ app.post('/api/admin/create-user', authenticateToken, async (req, res) => {
       name,
       mustChangePassword: true
     };
-
     if (role === 'faculty') {
       userData.areaOfResearch = areaOfResearch;
     }
-
     const user = new User(userData);
     await user.save();
-
     res.status(201).json({ 
       message: 'User created successfully',
       user: { loginId, name, role, defaultPassword } 
@@ -243,11 +221,9 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only admin can view users' });
     }
-
     const users = await User.find({ role: { $ne: 'admin' } })
       .select('loginId name role areaOfResearch createdAt')
       .sort({ createdAt: -1 });
-      
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -259,20 +235,15 @@ app.delete('/api/admin/user/:id', authenticateToken, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only admin can delete users' });
     }
-
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    // Delete related data
     if (user.role === 'faculty') {
       await Project.deleteMany({ faculty: user._id });
-      await Application.deleteMany({ project: { $in: await Project.find({ faculty: user._id }).distinct('_id') } });
     } else if (user.role === 'student') {
       await Application.deleteMany({ student: user._id });
     }
-
     await User.findByIdAndDelete(req.params.id);
     res.json({ message: 'User and related data deleted successfully' });
   } catch (error) {
@@ -285,24 +256,18 @@ app.post('/api/admin/reset-user/:id', authenticateToken, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only admin can reset users' });
     }
-
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    // Reset user data
     if (user.role === 'faculty') {
       await Project.deleteMany({ faculty: user._id });
-      await Application.deleteMany({ project: { $in: await Project.find({ faculty: user._id }).distinct('_id') } });
       user.projectsReviewed = 0;
     } else if (user.role === 'student') {
       await Application.deleteMany({ student: user._id });
     }
-
     user.mustChangePassword = true;
     await user.save();
-
     res.json({ message: 'User data reset successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -312,15 +277,12 @@ app.post('/api/admin/reset-user/:id', authenticateToken, async (req, res) => {
 app.get('/api/projects', authenticateToken, async (req, res) => {
   try {
     let filter = {};
-    
     if (req.user.role === 'student') {
       filter = { status: 'approved' };
     }
-    
     const projects = await Project.find(filter)
       .populate('faculty', 'name loginId')
       .sort({ createdAt: -1 });
-      
     res.json(projects);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -332,29 +294,18 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can create projects' });
     }
-
     const { title, abstract, timeline, seats } = req.body;
-    
-    // Updated character limit to better reflect word count
     if (abstract.length > 2500) {
       return res.status(400).json({ error: 'Abstract cannot exceed 500 words (approx. 2500 characters)' });
     }
-
-    // Get count of projects in this area for reviewer assignment
-    const projectCount = await Project.countDocuments({ 
+    const projectCount = await Project.countDocuments({
       faculty: { $in: await User.find({ areaOfResearch: req.user.areaOfResearch }).distinct('_id') }
     });
-
     const reviewers = await getNextReviewers(req.user.areaOfResearch, req.user._id, projectCount);
-    
-    // Check if any reviewer has reached the limit
     const overloadedReviewer = reviewers.find(r => r.projectsReviewed >= 7);
     if (overloadedReviewer) {
-      return res.status(400).json({ 
-        error: 'Project submission temporarily unavailable. High volume of projects currently under review. Please try again later.' 
-      });
+      return res.status(400).json({ error: 'Project submission temporarily unavailable. High volume of projects currently under review.' });
     }
-
     const project = new Project({
       title,
       abstract,
@@ -362,19 +313,12 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
       seats,
       seatsAvailable: seats,
       faculty: req.user._id,
-      status: 'pending'
+      status: 'pending',
+      assignedReviewers: reviewers.map(r => r._id)
     });
-
     await project.save();
-    
-    // Update reviewer counts
-    await User.updateMany(
-      { _id: { $in: reviewers.map(r => r._id) } },
-      { $inc: { projectsReviewed: 1 } }
-    );
-
+    await User.updateMany({ _id: { $in: reviewers.map(r => r._id) } }, { $inc: { projectsReviewed: 1 } });
     await project.populate('faculty', 'name loginId');
-    
     res.status(201).json(project);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -386,12 +330,10 @@ app.get('/api/projects/my', authenticateToken, async (req, res) => {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can access this endpoint' });
     }
-
     const projects = await Project.find({ faculty: req.user._id })
       .populate('faculty', 'name loginId')
-      .populate('rejectionComments.faculty', 'name loginId')
+      .populate('reviews.faculty', 'name loginId')
       .sort({ createdAt: -1 });
-      
     res.json(projects);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -403,54 +345,40 @@ app.get('/api/projects/review', authenticateToken, async (req, res) => {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can review projects' });
     }
-
-    // Find projects from same area of research, excluding own projects and already reviewed
-    const projects = await Project.find({ 
+    const projects = await Project.find({
       status: 'pending',
-      faculty: { $ne: req.user._id },
-      reviewedBy: { $ne: req.user._id }
+      assignedReviewers: req.user._id,
+      'reviews.faculty': { $ne: req.user._id }
     })
-    .populate({
-      path: 'faculty',
-      match: { areaOfResearch: req.user.areaOfResearch },
-      select: 'name loginId areaOfResearch'
-    })
+    .populate('faculty', 'name loginId areaOfResearch')
     .sort({ createdAt: 1 });
-
-    // Filter out projects where faculty doesn't match area of research
-    const reviewableProjects = projects.filter(project => project.faculty !== null);
-      
-    res.json(reviewableProjects);
+    res.json(projects);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
+
+async function processFinalReview(project) {
+  if (project.reviews.length === project.assignedReviewers.length) {
+    const hasRejection = project.reviews.some(review => review.decision === 'rejected');
+    project.status = hasRejection ? 'rejected' : 'approved';
+    await User.updateMany(
+        { _id: { $in: project.assignedReviewers } },
+        { $inc: { projectsReviewed: -1 } }
+    );
+  }
+  await project.save();
+}
 
 app.post('/api/projects/:id/approve', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can approve projects' });
     }
-
-    const project = await Project.findById(req.params.id).populate('faculty');
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    if (project.faculty.areaOfResearch !== req.user.areaOfResearch) {
-      return res.status(403).json({ error: 'Can only review projects in your area of research' });
-    }
-
-    project.reviewedBy.push(req.user._id);
-    
-    // Check if this is the 3rd approval (majority of 5 reviewers)
-    if (project.reviewedBy.length >= 3) {
-      project.status = 'approved';
-    }
-    
-    project.updatedAt = new Date();
-    await project.save();
-
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.reviews.push({ faculty: req.user._id, decision: 'approved' });
+    await processFinalReview(project);
     res.json({ message: 'Project review submitted successfully', project });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -462,37 +390,14 @@ app.post('/api/projects/:id/reject', authenticateToken, async (req, res) => {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can reject projects' });
     }
-
     const { comment } = req.body;
-    // Updated character limit to better reflect word count
     if (!comment || comment.length > 2500) {
-      return res.status(400).json({ error: 'Feedback comment is required and must not exceed 500 words (approx. 2500 characters)' });
+      return res.status(400).json({ error: 'Feedback comment is required and must not exceed 500 words.' });
     }
-
-    const project = await Project.findById(req.params.id).populate('faculty');
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    if (project.faculty.areaOfResearch !== req.user.areaOfResearch) {
-      return res.status(403).json({ error: 'Can only review projects in your area of research' });
-    }
-
-    project.rejectionComments.push({
-      faculty: req.user._id,
-      comment: comment
-    });
-    
-    project.status = 'rejected';
-    project.updatedAt = new Date();
-    await project.save();
-
-    // Decrease reviewer count for all assigned reviewers
-    await User.updateMany(
-      { areaOfResearch: req.user.areaOfResearch, role: 'faculty' },
-      { $inc: { projectsReviewed: -1 } }
-    );
-
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.reviews.push({ faculty: req.user._id, decision: 'rejected', comment: comment });
+    await processFinalReview(project);
     res.json({ message: 'Project rejected with feedback', project });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -505,47 +410,30 @@ app.post('/api/applications', authenticateToken, async (req, res) => {
     if (req.user.role !== 'student') {
       return res.status(403).json({ error: 'Only students can apply to projects' });
     }
-
-    const { projectId, cgpa, skills } = req.body;
-
+    const { projectId } = req.body;
     const applicationCount = await Application.countDocuments({ student: req.user._id });
     if (applicationCount >= 3) {
       return res.status(400).json({ error: 'Cannot apply to more than 3 projects' });
     }
-
-    const existingApplication = await Application.findOne({ 
-      student: req.user._id, 
-      project: projectId 
+    const existingApplication = await Application.findOne({
+      student: req.user._id,
+      project: projectId
     });
     if (existingApplication) {
       return res.status(400).json({ error: 'Already applied to this project' });
     }
-
     const project = await Project.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+    if (!project || project.status !== 'approved' || project.seatsAvailable <= 0) {
+      return res.status(400).json({ error: 'Cannot apply to this project at this time.' });
     }
-    if (project.status !== 'approved') {
-      return res.status(400).json({ error: 'Project not approved for applications' });
-    }
-    if (project.seatsAvailable <= 0) {
-      return res.status(400).json({ error: 'No seats available' });
-    }
-
     const application = new Application({
       student: req.user._id,
       project: projectId,
-      cgpa,
-      skills,
       status: 'pending'
     });
-
     await application.save();
-
     project.seatsAvailable -= 1;
     await project.save();
-
-    await application.populate(['student', 'project']);
     res.status(201).json(application);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -557,11 +445,9 @@ app.get('/api/applications/my', authenticateToken, async (req, res) => {
     if (req.user.role !== 'student') {
       return res.status(403).json({ error: 'Only students can access this endpoint' });
     }
-
     const applications = await Application.find({ student: req.user._id })
       .populate('project', 'title abstract timeline')
       .sort({ appliedAt: -1 });
-      
     res.json(applications);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -573,19 +459,13 @@ app.get('/api/applications/faculty', authenticateToken, async (req, res) => {
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can access this endpoint' });
     }
-
-    const applications = await Application.find()
+    const projects = await Project.find({ faculty: req.user._id }).select('_id');
+    const projectIds = projects.map(p => p._id);
+    const applications = await Application.find({ project: { $in: projectIds } })
       .populate('student', 'name loginId')
-      .populate({
-        path: 'project',
-        match: { faculty: req.user._id },
-        select: 'title'
-      })
+      .populate('project', 'title')
       .sort({ appliedAt: -1 });
-
-    const facultyApplications = applications.filter(app => app.project !== null);
-      
-    res.json(facultyApplications);
+    res.json(applications);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
@@ -596,35 +476,23 @@ app.post('/api/applications/:id/select', authenticateToken, async (req, res) => 
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can select students' });
     }
-
-    const application = await Application.findById(req.params.id)
-      .populate('project')
-      .populate('student');
-
-    if (!application) {
-      return res.status(404).json({ error: 'Application not found' });
+    const application = await Application.findById(req.params.id).populate('project');
+    if (!application || application.project.faculty.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not authorized for this application' });
     }
-
-    if (application.project.faculty.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not authorized to select for this project' });
-    }
-
     const existingSelection = await Application.findOne({
-      student: application.student._id,
+      student: application.student,
       status: 'selected'
     });
     if (existingSelection) {
       return res.status(400).json({ error: 'Student already selected for another project' });
     }
-
     application.status = 'selected';
     await application.save();
-
     await Application.updateMany(
-      { student: application.student._id, _id: { $ne: application._id } },
+      { student: application.student, _id: { $ne: application._id } },
       { status: 'rejected' }
     );
-
     res.json({ message: 'Student selected successfully', application });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -636,25 +504,15 @@ app.post('/api/applications/:id/reject', authenticateToken, async (req, res) => 
     if (req.user.role !== 'faculty') {
       return res.status(403).json({ error: 'Only faculty can reject applications' });
     }
-
-    const application = await Application.findById(req.params.id)
-      .populate('project');
-
-    if (!application) {
-      return res.status(404).json({ error: 'Application not found' });
+    const application = await Application.findById(req.params.id).populate('project');
+    if (!application || application.project.faculty.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not authorized for this application' });
     }
-
-    if (application.project.faculty.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not authorized to reject this application' });
-    }
-
     application.status = 'rejected';
     await application.save();
-
     const project = await Project.findById(application.project._id);
     project.seatsAvailable += 1;
     await project.save();
-
     res.json({ message: 'Application rejected successfully', application });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -664,12 +522,9 @@ app.post('/api/applications/:id/reject', authenticateToken, async (req, res) => 
 // Initialize demo data
 app.post('/api/init-demo', async (req, res) => {
   try {
-    // Clear existing non-admin users, projects, and applications
     await User.deleteMany({ role: { $ne: 'admin' } });
     await Project.deleteMany({});
     await Application.deleteMany({});
-    
-    // Create or find admin user
     let adminUser = await User.findOne({ loginId: 'admin123' });
     if (!adminUser) {
         adminUser = new User({
@@ -681,28 +536,23 @@ app.post('/api/init-demo', async (req, res) => {
         });
         await adminUser.save();
     }
-
-    // Create demo faculty
     const facultyUser = new User({
-      loginId: '123456', // 6-digit number
-      password: await bcrypt.hash('CompDr.', 10), // First 4 of "Computer Science" + first 3 of "Dr. John"
+      loginId: '123456',
+      password: await bcrypt.hash('CompDr.', 10),
       role: 'faculty',
       name: 'Dr. John Smith',
       areaOfResearch: 'Computer Science',
       mustChangePassword: true
     });
     await facultyUser.save();
-
-    // Create demo student
     const studentUser = new User({
       loginId: '24CSE12345',
-      password: await bcrypt.hash('010100', 10), // Demo DOB format ddmmyy
+      password: await bcrypt.hash('010100', 10),
       role: 'student',
       name: 'Jane Doe',
       mustChangePassword: true
     });
     await studentUser.save();
-
     res.json({ message: 'Demo data initialized successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
