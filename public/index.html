@@ -261,7 +261,7 @@
         }
 
         .rejection-comment {
-            background: #f8d7da;
+            background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
             margin: 10px 0;
@@ -326,8 +326,8 @@
         <div id="passwordModal" class="modal">
             <div class="modal-content">
                 <span class="close" onclick="closePasswordModal()">&times;</span>
-                <h3>Change Password Required</h3>
-                <p>For security, you must change your default password before proceeding.</p>
+                <h3>Change Password</h3>
+                <p id="passwordModalReason">For security, you must change your default password before proceeding.</p>
                 <div id="passwordModalMessage"></div>
                 <div class="form-group">
                     <label>Current Password:</label>
@@ -349,7 +349,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                 <h2>Student Dashboard</h2>
                 <div>
-                    <button class="btn btn-warning" onclick="showPasswordModal()">Change Password</button>
+                    <button class="btn btn-warning" onclick="showPasswordModal(false)">Change Password</button>
                     <button class="btn btn-danger" onclick="logout()">Logout</button>
                 </div>
             </div>
@@ -375,7 +375,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                 <h2>Faculty Dashboard</h2>
                 <div>
-                    <button class="btn btn-warning" onclick="showPasswordModal()">Change Password</button>
+                    <button class="btn btn-warning" onclick="showPasswordModal(false)">Change Password</button>
                     <button class="btn btn-danger" onclick="logout()">Logout</button>
                 </div>
             </div>
@@ -600,7 +600,10 @@
         }
 
         // Modal Functions
-        function showPasswordModal() { document.getElementById('passwordModal').style.display = 'block'; }
+        function showPasswordModal(isFirstLogin = true) {
+            document.getElementById('passwordModalReason').style.display = isFirstLogin ? 'block' : 'none';
+            document.getElementById('passwordModal').style.display = 'block';
+        }
         function closePasswordModal() { document.getElementById('passwordModal').style.display = 'none'; }
         function showRejectModal(projectId) {
             currentProjectForReject = projectId;
@@ -645,7 +648,7 @@
                     method: 'POST',
                     body: JSON.stringify({ comment })
                 });
-                showMessage('rejectModalMessage', 'Project reviewed with feedback');
+                showMessage('rejectModalMessage', 'Project review submitted');
                 setTimeout(() => {
                     closeRejectModal();
                     loadReviewProjects();
@@ -700,7 +703,7 @@
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById(role + 'Dashboard').classList.remove('hidden');
 
-                if (currentUser.mustChangePassword && role !== 'admin') showPasswordModal();
+                if (currentUser.mustChangePassword && role !== 'admin') showPasswordModal(true);
                 if (role === 'student') loadStudentDashboard();
                 else if (role === 'faculty') loadFacultyDashboard();
                 else if (role === 'admin') loadAdminDashboard();
@@ -770,27 +773,30 @@
                 document.getElementById('pendingCount').textContent = projects.filter(p => p.status === 'pending').length;
                 document.getElementById('reviewCount').textContent = reviewProjects.length;
                 
-                // My Projects
+                // My Projects - With new detailed review display
                 const projectsDiv = document.getElementById('facultyProjects');
                 projectsDiv.innerHTML = projects.length === 0 ? '<p>No projects created yet.</p>' : projects.map(p => {
-                    let commentsHTML = '';
-                    if (p.rejectionComments && p.rejectionComments.length > 0) {
-                        commentsHTML = `
-                        <div style="margin-top: 15px;"><h5>Review Comments:</h5>
-                            ${p.rejectionComments.map(c => `
-                                <div class="rejection-comment">
-                                    <strong>Reviewer:</strong> ${c.faculty.name}<br>
-                                    <strong>Feedback:</strong> ${c.comment}<br>
-                                    <small>Reviewed: ${new Date(c.reviewedAt).toLocaleDateString()}</small>
+                    let reviewsHTML = '';
+                    if (p.reviews && p.reviews.length > 0) {
+                        reviewsHTML = `
+                        <div style="margin-top: 15px;">
+                            <h5>Review Status (${p.reviews.length} / 5 reviewed):</h5>
+                            ${p.reviews.map(review => `
+                                <div class="rejection-comment" style="border-left-color: ${review.decision === 'rejected' ? '#dc3545' : '#28a745'};">
+                                    <strong>Reviewer:</strong> ${review.faculty.name}<br>
+                                    <strong>Decision:</strong> <span style="font-weight: bold; color: ${review.decision === 'rejected' ? '#dc3545' : '#28a745'};">${review.decision.charAt(0).toUpperCase() + review.decision.slice(1)}</span><br>
+                                    ${review.decision === 'rejected' ? `<strong>Feedback:</strong> ${review.comment}<br>` : ''}
+                                    <small>Reviewed: ${new Date(review.reviewedAt).toLocaleDateString()}</small>
                                 </div>`).join('')}
                         </div>`;
                     }
                     return `
                     <div class="project-card">
-                        <h4>${p.title}</h4><p><strong>Status:</strong> <span class="status-badge status-${p.status}">${p.status}</span></p>
+                        <h4>${p.title}</h4>
+                        <p><strong>Status:</strong> <span class="status-badge status-${p.status}">${p.status}</span></p>
                         <p><strong>Description:</strong> ${p.abstract}</p>
                         <p><strong>Seats:</strong> ${p.seatsAvailable}/${p.seats}</p>
-                        ${commentsHTML}
+                        ${reviewsHTML}
                     </div>`;
                 }).join('');
 
@@ -876,13 +882,10 @@
         async function loadAdminDashboard() {
             try {
                 const users = await apiCall('/api/admin/users');
-                const students = users.filter(u => u.role === 'student');
-                const faculty = users.filter(u => u.role === 'faculty');
-                document.getElementById('totalStudents').textContent = students.length;
-                document.getElementById('totalFaculty').textContent = faculty.length;
+                document.getElementById('totalStudents').textContent = users.filter(u => u.role === 'student').length;
+                document.getElementById('totalFaculty').textContent = users.filter(u => u.role === 'faculty').length;
                 document.getElementById('totalUsers').textContent = users.length;
-                const usersDiv = document.getElementById('usersList');
-                usersDiv.innerHTML = users.length === 0 ? '<p>No users found.</p>' : users.map(user => `
+                document.getElementById('usersList').innerHTML = users.length === 0 ? '<p>No users found.</p>' : users.map(user => `
                     <div class="user-card">
                         <h4>${user.name}</h4><p><strong>Login ID:</strong> ${user.loginId}</p>
                         <p><strong>Role:</strong> ${user.role}</p>
@@ -904,31 +907,15 @@
             document.getElementById('createAreaOfResearch').value = '';
         }
 
-        // CORRECTED: This function now properly handles the hint text
         function toggleUserRole(role) {
             document.querySelectorAll('#createUserForm .role-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
-
             const isStudent = role === 'student';
-            const loginIdLabel = document.getElementById('createLoginIdLabel');
-            const loginIdInput = document.getElementById('createLoginId');
-            const dobGroup = document.getElementById('dateOfBirthGroup');
-            const researchGroup = document.getElementById('areaOfResearchGroup');
-            const hintText = document.getElementById('loginIdFormatHint');
-
-            if (isStudent) {
-                loginIdLabel.textContent = 'Registration Number:';
-                loginIdInput.placeholder = 'Enter registration number';
-                dobGroup.classList.remove('hidden');
-                researchGroup.classList.add('hidden');
-                hintText.style.display = 'block'; // Show hint
-            } else {
-                loginIdLabel.textContent = 'Login ID:';
-                loginIdInput.placeholder = 'Enter 6-digit login ID';
-                dobGroup.classList.add('hidden');
-                researchGroup.classList.remove('hidden');
-                hintText.style.display = 'none'; // Hide hint
-            }
+            document.getElementById('createLoginIdLabel').textContent = isStudent ? 'Registration Number:' : 'Login ID:';
+            document.getElementById('createLoginId').placeholder = isStudent ? 'Enter registration number' : 'Enter 6-digit login ID';
+            document.getElementById('dateOfBirthGroup').classList.toggle('hidden', !isStudent);
+            document.getElementById('areaOfResearchGroup').classList.toggle('hidden', isStudent);
+            document.getElementById('loginIdFormatHint').style.display = isStudent ? 'block' : 'none';
         }
 
         async function createUser() {
@@ -939,15 +926,11 @@
             const areaOfResearch = document.getElementById('createAreaOfResearch').value;
 
             if (!loginId || !name) return showMessage('createUserMessage', 'Please fill all required fields', true);
-            if (role === 'student' && !dateOfBirth) return showMessage('createUserMessage', 'Date of birth is required for students', true);
-            if (role === 'faculty' && !areaOfResearch) return showMessage('createUserMessage', 'Area of research is required for faculty', true);
+            if (role === 'student' && !dateOfBirth) return showMessage('createUserMessage', 'Date of birth is required', true);
+            if (role === 'faculty' && !areaOfResearch) return showMessage('createUserMessage', 'Area of research is required', true);
 
-            if (role === 'student' && !/^\d{2}[A-Z]{3}\d{5}$/.test(loginId)) {
-                return showMessage('createUserMessage', 'Invalid format for Registration Number. Use YYBBBNNNNN.', true);
-            }
-            if (role === 'faculty' && !/^\d{6}$/.test(loginId)) {
-                return showMessage('createUserMessage', 'Invalid format for Login ID. Use 6 digits only.', true);
-            }
+            if (role === 'student' && !/^\d{2}[A-Z]{3}\d{5}$/.test(loginId)) return showMessage('createUserMessage', 'Invalid format. Use YYBBBNNNNN.', true);
+            if (role === 'faculty' && !/^\d{6}$/.test(loginId)) return showMessage('createUserMessage', 'Invalid format. Use 6 digits only.', true);
 
             try {
                 const response = await apiCall('/api/admin/create-user', {
@@ -986,15 +969,13 @@
                 });
             });
 
-            // Check if user is already logged in
             const storedToken = localStorage.getItem('token');
             const storedUser = localStorage.getItem('currentUser');
             if (storedToken && storedUser) {
                 token = storedToken;
                 currentUser = JSON.parse(storedUser);
                 document.getElementById('loginSection').classList.add('hidden');
-                const dashboardId = currentUser.role + 'Dashboard';
-                document.getElementById(dashboardId).classList.remove('hidden');
+                document.getElementById(currentUser.role + 'Dashboard').classList.remove('hidden');
                 
                 if (currentUser.role === 'student') loadStudentDashboard();
                 else if (currentUser.role === 'faculty') loadFacultyDashboard();
