@@ -159,10 +159,12 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await User.findByIdAndUpdate(req.user._id, { 
-      password: hashedPassword, 
-      mustChangePassword: false 
-    });
+    
+    // This is the new, more robust way to save the password
+    const userToUpdate = await User.findById(req.user._id);
+    userToUpdate.password = hashedPassword;
+    userToUpdate.mustChangePassword = false;
+    await userToUpdate.save();
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
