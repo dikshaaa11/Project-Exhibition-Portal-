@@ -5,20 +5,20 @@ A comprehensive web application that connects faculty and students for academic 
 ## Features
 
 ### For Students
-- Browse approved academic projects posted by faculty.
+- Browse **approved** academic projects posted by faculty.
 - Apply to a maximum of 3 projects.
 - View real-time status of applications (Pending, Selected, Rejected).
 - Secure login with mandatory password change on first use.
 
 ### For Faculty
 - **Propose Projects:** Create and submit project proposals with a 500-word limit abstract for peer review.
-- **Peer Review System:** Review project proposals from colleagues in the same research area.
-- **Manage Applications:** Review student applications and select candidates for your projects.
+- **Peer Review System:** Review project proposals from colleagues in the same research area. A project is only approved if all 5 assigned reviewers approve it.
+- **Detailed Feedback:** View the specific decision (Approved/Rejected) and comments from each of the 5 reviewers for your proposed projects.
+- **Manage Applications:** Review student applications and select candidates for your approved projects.
 - **Fair Workload:** The system ensures an equal distribution of review tasks among faculty, with a limit of 7 pending reviews per person.
-- **Constructive Feedback:** Provide detailed feedback (up to 500 words) when a project proposal is rejected.
 
 ### For Admin
-- **User Management:** Create and manage student and faculty accounts.
+- **User Management:** Create and manage student and faculty accounts with specific ID formats.
 - **Account Control:** Securely delete or reset user accounts, clearing all associated data (projects, applications).
 - **Automated Passwords:** The system generates secure, predictable default passwords for new users.
 - **Data Privacy:** Admins manage accounts but have no access to academic content like project details or student applications.
@@ -60,8 +60,9 @@ A comprehensive web application that connects faculty and students for academic 
 ### 3. Faculty Project Cycle
 - A faculty member proposes a new project.
 - The system automatically assigns the proposal to 5 other faculty members in the same research area for review. The assignment rotates to ensure fair workload distribution.
-- A project is **approved** after receiving 3 approvals.
-- A project is **rejected** if any reviewer provides feedback for rejection. The proposing faculty can view the feedback and resubmit later.
+- The project remains in 'pending' status until all 5 faculty have submitted their review.
+- A project is **approved** only if all 5 reviewers approve it.
+- A project is **rejected** if even one reviewer rejects it. The proposing faculty can view all feedback and must create a new proposal to resubmit.
 
 ### 4. Student Application Cycle
 - Students can only browse and apply to **approved** projects.
@@ -78,46 +79,3 @@ A comprehensive web application that connects faculty and students for academic 
 │   └── index.html      # The single-page frontend (HTML, CSS, JS)
 └── README.md           # This file
 ```
-
-## API Endpoints
-
-A brief overview of the core API endpoints.
-
-#### Authentication
-- `POST /api/auth/login`: User login.
-- `POST /api/auth/change-password`: Securely change the user's password.
-
-#### Admin
-- `POST /api/admin/create-user`: Create a new student or faculty user.
-- `GET /api/admin/users`: Fetch a list of all users.
-- `DELETE /api/admin/user/:id`: Delete a user and all their associated data.
-- `POST /api/admin/reset-user/:id`: Reset a user's account data.
-
-#### Projects (Faculty)
-- `POST /api/projects`: Propose a new project.
-- `GET /api/projects/my`: View your own proposed projects.
-- `GET /api/projects/review`: Get projects assigned to you for review.
-- `POST /api/projects/:id/approve`: Approve a project.
-- `POST /api/projects/:id/reject`: Reject a project with feedback.
-
-#### Applications (Student/Faculty)
-- `POST /api/applications`: Student applies to a project.
-- `GET /api/applications/my`: Student views their applications.
-- `GET /api/applications/faculty`: Faculty views applications for their projects.
-- `POST /api/applications/:id/select`: Faculty selects a student.
-- `POST /api/applications/:id/reject`: Faculty rejects an application.
-
-## Deployment
-
-This project is configured for easy deployment on platforms like Render.
-
-1.  **Fork and Clone** the repository.
-2.  **Set up MongoDB:** Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/atlas) and get your connection string.
-3.  **Deploy on Render:**
-    - Create a new "Web Service" and connect your GitHub repository.
-    - Set the **Build Command** to `npm install`.
-    - Set the **Start Command** to `npm start`.
-    - Add the following **Environment Variables**:
-      - `MONGODB_URI`: Your MongoDB Atlas connection string.
-      - `JWT_SECRET`: A long, random, secret string for signing tokens.
-4.  **Initialize Data:** After deployment, visit your site and click the "Initialize Demo Data" button to create the demo accounts.
